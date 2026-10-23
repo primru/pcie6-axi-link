@@ -1,8 +1,4 @@
-// N:1 crossbar with QoS arbitration and packet (tlast) locking.
-//  - Arbitration happens only at packet boundaries: highest tqos wins,
-//    ties broken round-robin. Once a master is granted, the crossbar stays
-//    locked to it until a beat with tlast is delivered.
-//  - Zero-latency mux: grant[] is a combinational pop strobe to the slave IFs.
+
 module axi_interconnect #(
     parameter N       = 2,
     parameter DATA_W  = 512,
