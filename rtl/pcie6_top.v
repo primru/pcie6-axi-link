@@ -1,7 +1,5 @@
 `timescale 1ns/1ps
-// AXI4-Stream (N masters) <-> PCIe-6-style 4-lane link, full duplex.
-//  TX: AXI-S slave IFs -> QoS/locking crossbar -> link layer -> PHY lanes
-//  RX: PHY lanes -> link layer (FEC/CRC/ACK/replay) -> AXI-S style record output
+
 module pcie6_top #(
     parameter integer N            = 2,
     parameter integer DATA_W       = 512,
@@ -19,7 +17,6 @@ module pcie6_top #(
     input  wire clk,
     input  wire rst_n,
 
-    // AXI4-Stream slave ports (from N masters)
     input  wire [N-1:0]        m_tvalid,
     output wire [N-1:0]        m_tready,
     input  wire [DATA_W*N-1:0] m_tdata,
@@ -31,9 +28,8 @@ module pcie6_top #(
     input  wire [N-1:0]        m_tlast,
     input  wire [QW*N-1:0]     m_tqos,
     input  wire [31*N-1:0]     m_address,
-    input  wire [N-1:0]        m_drw,          // 1 = write/data beat, 0 = read request (header only)
-
-    // 4-lane symbol bus to the analog PHY (Tx)
+    input  wire [N-1:0]        m_drw,         
+    
     output wire [63:0]  lane0_sym,
     output wire [63:0]  lane1_sym,
     output wire [63:0]  lane2_sym,
@@ -41,7 +37,7 @@ module pcie6_top #(
     output wire         phy_valid,
     output wire         phy_last,
 
-    // 4-lane symbol bus from the analog PHY (Rx)
+   
     input  wire [63:0]  rx_lane0_sym,
     input  wire [63:0]  rx_lane1_sym,
     input  wire [63:0]  rx_lane2_sym,
@@ -49,7 +45,7 @@ module pcie6_top #(
     input  wire         rx_phy_valid,
     input  wire         rx_phy_last,
 
-    // Received records
+    
     output wire                o_tvalid,
     input  wire                o_tready,
     output wire [DATA_W-1:0]   o_tdata,
@@ -62,7 +58,7 @@ module pcie6_top #(
     output wire                o_drw,
     output wire [30:0]         o_address,
 
-    // Tx monitor + statistics
+   
     output wire         mon_tx_valid,
     output wire [255:0] mon_tx_data,
     output wire         mon_tx_last,
@@ -76,7 +72,7 @@ module pcie6_top #(
     wire [N-1:0]        master_valid, grant;
     wire [DATA_W*N-1:0] master_data;
     wire [KEEP_W*N-1:0] master_keep, master_strb;
-    localparam integer UW = USER_W + 31;        // address travels with the beat, next to tuser
+    localparam integer UW = USER_W + 31;        
     wire [UW*N-1:0]     master_user;
     wire [ID_W*N-1:0]   master_id;
     wire [DEST_W*N-1:0] master_dest;

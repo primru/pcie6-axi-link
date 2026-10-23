@@ -1,12 +1,3 @@
-
-//##############################################################################
-// flit_protect : adds CRC and FEC.
-//
-//   accept -> slot RAM (body = payload+DLP, 242 B)
-//   issue  -> 8 x 32-byte chunks (front-padded with 14 zero bytes) -> CRC pipe
-//   CRC done -> {body, CRC} (250 B) -> FEC pipe (3 stages, 1 flit/clk)
-//   FEC done -> slot marked complete, popped in order by the transmitter
-//##############################################################################
 module flit_protect #(
     parameter integer DEPTH_LOG2 = 2
 )(
@@ -34,11 +25,10 @@ module flit_protect #(
     wire [DEPTH_LOG2-1:0] crc_slot = crc_ptr[DEPTH_LOG2-1:0];
     wire [DEPTH_LOG2-1:0] rd_slot  = rd_ptr [DEPTH_LOG2-1:0];
 
-    wire [DEPTH_LOG2:0] occ = wr_ptr - rd_ptr;   // fixed: original compared a 32-bit wrapped difference
+    wire [DEPTH_LOG2:0] occ = wr_ptr - rd_ptr;   
     assign s_ready = ~occ[DEPTH_LOG2];
     wire accept = s_valid & s_ready;
 
-    // ---------------- CRC issue FSM (one 32-byte chunk per clock) ------------
     reg        busy;
     reg [2:0]  cidx;
     wire [2047:0] padded = {112'b0, body_mem[iss_slot]};
@@ -55,7 +45,6 @@ module flit_protect #(
         .crc_out(crc_val), .crc_valid_out(crc_vld)
     );
 
-    // ---------------- FEC ----------------------------------------------------
     wire [47:0]            fec_val;
     wire                   fec_vld;
     wire [DEPTH_LOG2-1:0]  fec_tag;
@@ -66,8 +55,7 @@ module flit_protect #(
         .in_data({body_mem[crc_slot], crc_val}),
         .fec_out(fec_val), .out_valid(fec_vld), .out_tag(fec_tag)
     );
-
-    // ---------------- control ------------------------------------------------
+    
     reg [DEPTH-1:0] done_n;
     wire pop = m_valid & m_ready;
 
@@ -81,24 +69,21 @@ module flit_protect #(
                 wr_ptr <= wr_ptr + 1'b1;
             end
 
-            // issue chunks
             if (!busy) begin
                 if (iss_ptr != wr_ptr) begin busy <= 1'b1; cidx <= 3'd0; end
             end else begin
                 cidx <= cidx + 1'b1;
                 if (cidx == 3'd7) begin
                     iss_ptr <= iss_ptr + 1'b1;
-                    busy    <= more;       // back-to-back when next flit waits
+                    busy    <= more;       
                 end
             end
 
-            // CRC result
             if (crc_vld) begin
                 crc_mem[crc_slot] <= crc_val;
                 crc_ptr <= crc_ptr + 1'b1;
             end
 
-            // FEC result
             done_n = done;
             if (fec_vld) begin
                 fec_mem[fec_tag] <= fec_val;
@@ -116,15 +101,6 @@ module flit_protect #(
     assign m_flit  = {body_mem[rd_slot], crc_mem[rd_slot], fec_mem[rd_slot]};
 endmodule
 
-
-//##############################################################################
-// pcie6_crc_pipeline : RS-style CRC over GF(2^8), 8 check symbols
-//   crc = ( M(x)*x^8 ) mod g(x),  g(x) = prod_{i=0..7}(x + alpha^(FCR+i)),
-//   primitive poly 0x11D.  CHUNK_BYTES bytes per clock via look-ahead:
-//        R_new = A*R ^ B*chunk
-//   S1: input reg | S2: B*chunk in 64-bit segments | S3: recursion + output
-//   FCR is a placeholder - set it from the specification / paper.
-//##############################################################################
 module pcie6_crc_pipeline #(
     parameter integer FCR         = 0,
     parameter integer CHUNK_BYTES = 32
@@ -299,14 +275,6 @@ module pcie6_crc_pipeline #(
     end
 endmodule
 
-
-//##############################################################################
-// pcie6_fec_flit : fully parallel, 3-stage pipelined FEC for a 250-byte FLIT
-// region, one FLIT per clock.  Byte i belongs to group (i mod 3) at position
-// k = i/3 (byte 0 = first byte):    P_g = sum B,   C_g = sum B * alpha^k
-// fec_out = {P2,C2,P1,C1,P0,C0}.
-//   S1: 16 lane partials (<=128-input XOR trees)  S2: 4:1  S3: 4:1 -> output
-//##############################################################################
 module pcie6_fec_flit #(
     parameter integer TAGW = 2
 )(
@@ -344,7 +312,6 @@ module pcie6_fec_flit #(
         end
     endfunction
 
-    // row-major 48 x 128 matrix for lane l (16 bytes, first byte = MSB)
     function [48*128-1:0] build_lane;
         input integer l;
         integer j, b, o, idx, g, k, p;
@@ -405,13 +372,6 @@ module pcie6_fec_flit #(
     end
 endmodule
 
-
-//##############################################################################
-// MODULE 3: FLIT TRANSMITTER
-// 2048-bit FLIT -> eight 256-bit beats, MSB first, tx_last on beat 8.
-// A new FLIT is loaded in the same cycle the last beat is accepted, so
-// back-to-back FLITs cost exactly 8 clocks each (was 9).
-//##############################################################################
 module flit_transmitter (
     input  wire          aclk,
     input  wire          aresetn,

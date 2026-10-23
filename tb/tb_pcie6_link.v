@@ -1,7 +1,4 @@
 `timescale 1ns/1ps
-// Two pcie6_top instances connected back to back (A <-> B).
-// dir 0 = A masters -> B record output, dir 1 = B masters -> A record output.
-// Source id: tid[0] = master index, tid[11:4] = packet number.
 module tb_pcie6_link;
     localparam N = 2, MAXB = 2048;
     localparam REPLAY_TMO = 512;
@@ -25,7 +22,6 @@ module tb_pcie6_link;
     wire [63:0] a_l0, a_l1, a_l2, a_l3, b_l0, b_l1, b_l2, b_l3;
     wire        a_pv, a_pl, b_pv, b_pl;
 
-    // record outputs
     wire a_ov, b_ov;
     wire [511:0] a_od, b_od;  wire [63:0] a_ok, a_os, b_ok, b_os;
     wire [7:0] a_ou, b_ou, a_ode, b_ode;  wire [11:0] a_oi, b_oi;
@@ -35,10 +31,9 @@ module tb_pcie6_link;
     wire [15:0] a_txf, a_rep, a_rxf, a_fec, a_crc, a_drp;
     wire [15:0] b_txf, b_rep, b_rxf, b_fec, b_crc, b_drp;
 
-    // ---------------------------------------------------- error injection
     reg [63:0] inj_ab0 = 0, inj_ab1 = 0, inj_ab2 = 0, inj_ab2b = 0, inj_ab3 = 0;
     reg [63:0] inj_ba0 = 0, inj_ba1 = 0, inj_ba2 = 0, inj_ba3 = 0;
-    reg        kill_ba = 0;                       // corrupt every B->A beat
+    reg        kill_ba = 0;                       
     wire [63:0] kmask0 = kill_ba ? 64'h4000_0000_0000_0000 : 64'h0;
 
     wire [63:0] ab0 = a_l0 ^ (a_pv ? inj_ab0 : 64'h0);
@@ -80,7 +75,6 @@ module tb_pcie6_link;
         .st_tx_flits(b_txf), .st_replay(b_rep), .st_rx_flits(b_rxf),
         .st_fec_corr(b_fec), .st_crc_fail(b_crc), .st_drop(b_drp));
 
-    // ---------------------------------------------------------- scoreboard
     reg [511:0] e_data [0:4*MAXB-1];
     reg [63:0]  e_keep [0:4*MAXB-1];
     reg [63:0]  e_strb [0:4*MAXB-1];
@@ -132,14 +126,12 @@ module tb_pcie6_link;
     always @(posedge clk) if (rst_n && a_ov && a_ord)
         check_beat(1, a_od, a_ok, a_os, a_ou, a_oi, a_ode, a_ol, a_orw, a_oa);
 
-    // random backpressure on the record outputs
     reg bp_en = 0;
     always @(negedge clk) begin
         a_ord <= bp_en ? ($random & 1) : 1'b1;
         b_ord <= bp_en ? ($random & 1) : 1'b1;
     end
 
-    // ------------------------------------------------------------ drivers
     task automatic put_beat(input integer dir, input integer m,
         input [511:0] d, input [63:0] k, input [63:0] s, input [7:0] u,
         input [11:0] id, input [7:0] de, input l, input rw, input [30:0] ad, input [6:0] q);
@@ -168,7 +160,6 @@ module tb_pcie6_link;
         end
     endtask
 
-    // one packet: nbeats beats, last beat has tail bytes valid (1..64)
     task automatic send_pkt(input integer dir, input integer m, input integer nbeats,
                             input integer tail, input integer rw, input integer qos);
         integer b, idx, ix;
@@ -213,7 +204,6 @@ module tb_pcie6_link;
         end
     endtask
 
-    // flip symbols on the n-th valid A->B beat (dir 0) after the call; lanes given by masks
     task automatic inject_ab(input integer skip, input [63:0] m0, input [63:0] m1,
                              input [63:0] m2, input [63:0] m3);
         integer cnt; reg done;
@@ -234,7 +224,6 @@ module tb_pcie6_link;
         end
     endtask
 
-    // ------------------------------------------------------------ test flow
     integer p, nb, t0_fec, t0_crc, t0_rep, t0_drp;
     integer errs_before;
 
@@ -254,7 +243,7 @@ module tb_pcie6_link;
         for (ii = 0; ii < 4; ii = ii + 1) begin snt[ii] = 0; rcv[ii] = 0; pktno[ii] = 0; end
         open_m[0] = -1; open_m[1] = -1;
 
-        // ---- T1 reset / idle ----
+        
         begin_test("T1 reset and idle");
         repeat (5) @(posedge clk);
         rst_n = 1;
@@ -264,19 +253,19 @@ module tb_pcie6_link;
         end
         end_test("T1 reset and idle");
 
-        // ---- T2 single write ----
+        
         begin_test("T2 single 64B write A.m0 -> B");
         send_pkt(0, 0, 1, 64, 1, 10);
         wait_done(2000, "T2");
         end_test("T2 single 64B write A.m0 -> B");
 
-        // ---- T3 read request (header only) ----
+        
         begin_test("T3 read request A.m1 -> B");
         send_pkt(0, 1, 1, 64, 0, 5);
         wait_done(2000, "T3");
         end_test("T3 read request A.m1 -> B");
 
-        // ---- T4 concurrent multi-beat packets, no interleaving ----
+        
         begin_test("T4 two masters, 6-beat packets, packet locking and QoS");
         fork
             send_pkt(0, 0, 6, 64, 1, 3);
@@ -285,14 +274,14 @@ module tb_pcie6_link;
         wait_done(3000, "T4");
         end_test("T4 two masters, 6-beat packets, packet locking and QoS");
 
-        // ---- T5 partial last beat ----
+        
         begin_test("T5 partial tkeep/tstrb on last beat");
         send_pkt(0, 0, 3, 13, 1, 1);
         send_pkt(0, 1, 2, 1, 1, 1);
         wait_done(3000, "T5");
         end_test("T5 partial tkeep/tstrb on last beat");
 
-        // ---- T6 network packet processing workload, both directions ----
+        
         begin_test("T6 network workload: 4 sources x 12 packets (1..24 beats), mixed reads");
         fork
             begin : s00 integer q; for (q = 0; q < 12; q = q + 1) send_pkt(0, 0, 1 + ($random & 32'hFF) % 24, 1 + ($random & 32'hFF) % 64, 1, q%4); end
@@ -303,17 +292,16 @@ module tb_pcie6_link;
         wait_done(40000, "T6");
         end_test("T6 network workload: 4 sources x 12 packets (1..24 beats), mixed reads");
 
-        // ---- T7 ML inference: weight stream + read requests + completions ----
+        
         begin_test("T7 ML workload: 64-beat weight tensor + read requests + completions");
         fork
-            send_pkt(0, 0, 64, 64, 1, 4);                                  // weights A -> B
-            begin : rq integer q; for (q = 0; q < 10; q = q + 1) send_pkt(0, 1, 1, 64, 0, 8); end   // read requests A -> B
-            send_pkt(1, 0, 32, 64, 1, 4);                                  // completions with data B -> A
-        join
+            send_pkt(0, 0, 64, 64, 1, 4);                                  
+            begin : rq integer q; for (q = 0; q < 10; q = q + 1) send_pkt(0, 1, 1, 64, 0, 8); end   
+            send_pkt(1, 0, 32, 64, 1, 4);                                 
         wait_done(30000, "T7");
         end_test("T7 ML workload: 64-beat weight tensor + read requests + completions");
 
-        // ---- T8 correctable error: one symbol error ----
+
         begin_test("T8 single symbol error -> FEC corrects, no replay");
         t0_fec = b_fec; t0_rep = a_rep; t0_crc = b_crc;
         fork
@@ -326,7 +314,7 @@ module tb_pcie6_link;
         if (a_rep != t0_rep)  err("unexpected replay");
         end_test("T8 single symbol error -> FEC corrects, no replay");
 
-        // ---- T9 uncorrectable error -> NAK + replay ----
+        
         begin_test("T9 two bytes in one FEC group -> CRC fail, NAK, replay");
         t0_crc = b_crc; t0_rep = a_rep;
         fork
@@ -338,7 +326,7 @@ module tb_pcie6_link;
         if (a_rep == t0_rep)  err("no replay after NAK");
         end_test("T9 two bytes in one FEC group -> CRC fail, NAK, replay");
 
-        // ---- T10 reverse link dead: ACK loss -> window stall -> replay timeout ----
+        
         begin_test("T10 ACK path corrupted: window stall, replay timeout, recovery");
         t0_rep = a_rep;
         kill_ba = 1;
@@ -349,7 +337,7 @@ module tb_pcie6_link;
         wait_done(12000, "T10");
         end_test("T10 ACK path corrupted: window stall, replay timeout, recovery");
 
-        // ---- T11 sink backpressure -> overflow drop -> NAK/replay ----
+       
         begin_test("T11 random sink backpressure, no data loss");
         bp_en = 1;
         fork
@@ -364,7 +352,7 @@ module tb_pcie6_link;
         $display("A: tx_flits=%0d replay=%0d rx_flits=%0d fec_corr=%0d crc_fail=%0d drop=%0d", a_txf, a_rep, a_rxf, a_fec, a_crc, a_drp);
         $display("B: tx_flits=%0d replay=%0d rx_flits=%0d fec_corr=%0d crc_fail=%0d drop=%0d", b_txf, b_rep, b_rxf, b_fec, b_crc, b_drp);
 
-        // ---- T12 reset recovery ----
+        
         begin_test("T12 reset recovery");
         rst_n = 0; repeat (4) @(posedge clk); rst_n = 1;
         repeat (30) begin
@@ -380,7 +368,7 @@ module tb_pcie6_link;
         $finish;
     end
 
-    // global watchdog
+    
     initial begin
         #200_000_000;
         $display("GLOBAL TIMEOUT");
