@@ -1,8 +1,3 @@
-//##############################################################################
-// flit_receiver : assembles eight 256-bit beats (MSB first) into one FLIT.
-// Framing check: rx_last must coincide with the 8th beat, otherwise the
-// partial FLIT is discarded (f_err pulse).
-//##############################################################################
 module flit_receiver (
     input  wire          aclk,
     input  wire          aresetn,
@@ -36,15 +31,6 @@ module flit_receiver (
     end
 endmodule
 
-
-//##############################################################################
-// flit_check : receive-side FEC correction + CRC check, pipelined, in order.
-//   slot RAM -> FEC syndrome (reuses pcie6_fec_flit) -> single-symbol
-//   correction per 3-way interleave group -> CRC over corrected bytes 0..241
-//   -> o_ok = CRC match and no uncorrectable group.
-// A FLIT arriving while all slots are busy is dropped (drop pulse); the
-// sequence-number logic recovers it with NAK/replay.
-//##############################################################################
 module flit_check #(
     parameter integer DEPTH_LOG2 = 2
 )(
@@ -100,7 +86,7 @@ module flit_check #(
     wire [DEPTH_LOG2:0] occ   = wr - rd;
     wire                space = ~occ[DEPTH_LOG2];
 
-    // ---------------- FEC syndrome ----------------
+    
     wire                  fec_in_v = (fi != wr);
     wire [47:0]           fec_val;
     wire                  fec_ov;
@@ -114,7 +100,7 @@ module flit_check #(
     );
 
     wire [2047:0] cw  = mem[fec_tag];
-    wire [47:0]   syn = fec_val ^ cw[47:0];       // {P2,C2,P1,C1,P0,C0} syndromes
+    wire [47:0]   syn = fec_val ^ cw[47:0];       
 
     wire [1999:0] corr_body;
     wire [249:0]  match_v;
@@ -143,10 +129,9 @@ module flit_check #(
             gs1[q] = (syn[16*q +: 8]     != 8'h00);
         end
     end
-    wire unc_now = |(gs0 & gs1 & ~gm);   // both syndromes set but no valid position
+    wire unc_now = |(gs0 & gs1 & ~gm);   
     wire any_err = |syn;
 
-    // ---------------- CRC over corrected bytes 0..241 ----------------
     reg        busy;
     reg [2:0]  cidx;
     wire [2047:0] ci_word = mem[ci_s];
@@ -211,14 +196,6 @@ module flit_check #(
 endmodule
 
 
-//##############################################################################
-// rx_link_ctl : sequence tracking, ACK/NAK generation, ACK/NAK forwarding
-//   data flit, seq == expected : accept (if depacketizer free), ACK coalesced
-//   data flit, seq ahead       : drop, NAK(expected) (re-armed after NAK_TMO)
-//   data flit, seq behind      : drop, immediate ACK (duplicate after replay)
-//   bad CRC                    : drop, NAK(expected)
-//   control flit               : forwarded to replay_tx
-//##############################################################################
 module rx_link_ctl #(
     parameter integer ACK_EVERY = 2,
     parameter integer ACK_TMO   = 16,
@@ -310,9 +287,6 @@ module rx_link_ctl #(
 endmodule
 
 
-//##############################################################################
-// rec_depack : unpacks the records of one accepted payload, one per clock
-//##############################################################################
 module rec_depack (
     input  wire          clk,
     input  wire          rst_n,
