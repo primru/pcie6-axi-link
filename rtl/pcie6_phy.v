@@ -1,18 +1,3 @@
-//==============================================================================
-// Protocol-to-PHY layer (4 lanes, 64 bits = 32 PAM4 symbols per lane per clock)
-//
-//   Tx: byte stripe -> scramble -> binary-to-Gray -> (optional) mod-4 precode
-//   Rx: inverse of the above
-//
-// Conventions
-//   * Beat byte j (flow_data[255-8j -: 8]) goes to lane (j mod 4), slot j/4.
-//   * Lane word: first byte in [63:56]; symbol t is bits [63-2t -: 2]; symbol 0
-//     is transmitted first.
-//   * Gray: g = {b1, b1^b0}.  Precode: p[t] = (g[t] - p[t-1]) mod 4.
-//   * Scrambler: 23-bit LFSR per lane (x^23+x^21+x^16+x^8+x^5+x^2+1), reseeded
-//     and precoder cleared at the first beat of every FLIT (after phy_last).
-//==============================================================================
-
 module pcie6_proto_to_phy #(
     parameter integer PRECODE  = 1,
     parameter integer SCRAMBLE = 1
@@ -31,7 +16,7 @@ module pcie6_proto_to_phy #(
     output reg          phy_valid,
     output reg          phy_last
 );
-    function [86:0] scr_adv;      // {next_state[22:0], keystream[63:0]}
+    function [86:0] scr_adv;      
         input [22:0] s;
         integer i;
         reg [22:0] st;
@@ -48,7 +33,7 @@ module pcie6_proto_to_phy #(
         end
     endfunction
 
-    function [65:0] enc_lane;     // {last_precoded[1:0], symbols[63:0]}
+    function [65:0] enc_lane;     
         input [63:0] d;
         input [1:0]  pin;
         integer t;
@@ -69,7 +54,7 @@ module pcie6_proto_to_phy #(
         end
     endfunction
 
-    function [63:0] stripe;       // lane l of a 256-bit beat
+    function [63:0] stripe;       
         input [255:0] f;
         input integer l;
         integer m;
@@ -163,7 +148,7 @@ module pcie6_phy_to_proto #(
         end
     endfunction
 
-    function [63:0] dec_lane;     // precode inverse + un-Gray
+    function [63:0] dec_lane;     
         input [63:0] sy;
         input [1:0]  pin;
         integer t;
