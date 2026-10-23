@@ -1,12 +1,3 @@
-
-//##############################################################################
-// flit_protect : adds CRC and FEC.
-//
-//   accept -> slot RAM (body = payload+DLP, 242 B)
-//   issue  -> 8 x 32-byte chunks (front-padded with 14 zero bytes) -> CRC pipe
-//   CRC done -> {body, CRC} (250 B) -> FEC pipe (3 stages, 1 flit/clk)
-//   FEC done -> slot marked complete, popped in order by the transmitter
-//##############################################################################
 module flit_protect #(
     parameter integer DEPTH_LOG2 = 2
 )(
