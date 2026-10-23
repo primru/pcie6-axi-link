@@ -1,24 +1,7 @@
-//==============================================================================
-// PCIe-6.0-style link layer (full duplex)
-//
-// FLIT (256 B):  payload 236 B [2047:160] | DLP 6 B [159:112] | CRC 8 B | FEC 6 B
-// DLP (48 b):    [47:46] type  00 data, 01 ACK, 10 NAK
-//                [45:36] seq   data: flit sequence, ACK/NAK: next expected
-//                [35:32] nrec  records in payload (data flits)
-//                [31:24] nbytes used payload bytes (data flits)
-//                [23:0]  reserved
-// Record:        24 B header (+ 64 B data when rw=1), never split across FLITs
-// Header (192b): [191] rw  [190] last  [189:159] addr  [158:147] id
-//                [146:139] dest [138:131] user [130:67] keep [66:3] strb
-//
-// TX: builder -> packer -> (ctl mux) -> flit_protect(CRC,FEC) -> replay_tx
-//     -> flit_transmitter
-// RX: flit_receiver -> flit_check(FEC correct, CRC) -> rx_link_ctl -> rec_depack
-//==============================================================================
 module pcie_link_layer #(
-    parameter integer REPLAY_LOG2 = 3,     // replay buffer / window = 2^REPLAY_LOG2 flits
-    parameter integer FLUSH_TMO   = 16,    // idle clocks before a partial FLIT is sent
-    parameter integer REPLAY_TMO  = 2048,  // clocks without ACK progress before replay
+    parameter integer REPLAY_LOG2 = 3,     
+    parameter integer FLUSH_TMO   = 16,    
+    parameter integer REPLAY_TMO  = 2048, 
     parameter integer NAK_TMO     = 256,
     parameter integer ACK_EVERY   = 2,
     parameter integer ACK_TMO     = 16
@@ -26,7 +9,6 @@ module pcie_link_layer #(
     input  wire          aclk,
     input  wire          aresetn,
 
-    // ---- TX side: records from the interconnect ----
     input  wire          s_valid,
     output wire          s_ready,
     input  wire [30:0]   s_address,
@@ -44,12 +26,10 @@ module pcie_link_layer #(
     output wire [255:0]  tx_data,
     output wire          tx_last,
 
-    // ---- RX side: 256-bit beats from the PHY ----
     input  wire          rx_valid,
     input  wire [255:0]  rx_data,
     input  wire          rx_last,
 
-    // ---- RX side: decoded records ----
     output wire          o_tvalid,
     input  wire          o_tready,
     output wire [511:0]  o_tdata,
@@ -62,7 +42,6 @@ module pcie_link_layer #(
     output wire          o_drw,
     output wire [30:0]   o_address,
 
-    // ---- statistics ----
     output reg  [15:0]   st_tx_flits,
     output reg  [15:0]   st_replay,
     output reg  [15:0]   st_rx_flits,
@@ -70,7 +49,6 @@ module pcie_link_layer #(
     output reg  [15:0]   st_crc_fail,
     output reg  [15:0]   st_drop
 );
-    // ------------------------------------------------------------------ TX
     wire          rec_valid, rec_ready;
     wire [703:0]  rec;
     transaction_builder u_builder (
@@ -94,7 +72,6 @@ module pcie_link_layer #(
         .m_payload(pk_payload), .m_dlp(pk_dlp)
     );
 
-    // ---- control-flit (ACK/NAK) insertion in front of flit_protect ----
     wire       ctl_v, ctl_nak;
     wire [9:0] ctl_seq;
     reg        cp_pend, cp_nak;
@@ -110,7 +87,7 @@ module pcie_link_layer #(
             cp_pend <= 1'b0; cp_nak <= 1'b0; cp_seq <= 10'd0;
         end else begin
             if (cp_pend & prot_s_ready) cp_pend <= 1'b0;
-            if (ctl_v && !(cp_pend && cp_nak && !ctl_nak)) begin   // a pending NAK is not overwritten by an ACK
+            if (ctl_v && !(cp_pend && cp_nak && !ctl_nak)) begin   
                 cp_pend <= 1'b1; cp_nak <= ctl_nak; cp_seq <= ctl_seq;
             end
         end
@@ -144,7 +121,6 @@ module pcie_link_layer #(
         .tx_data(tx_data), .tx_last(tx_last)
     );
 
-    // ------------------------------------------------------------------ RX
     wire          f_valid, f_err;
     wire [2047:0] f_flit;
     flit_receiver u_flit_rx (
@@ -183,7 +159,6 @@ module pcie_link_layer #(
         .o_tdest(o_tdest), .o_tlast(o_tlast), .o_drw(o_drw), .o_address(o_address)
     );
 
-    // ------------------------------------------------------------------ stats
     always @(posedge aclk or negedge aresetn) begin
         if (!aresetn) begin
             st_tx_flits <= 16'd0; st_replay <= 16'd0; st_rx_flits <= 16'd0;
@@ -199,10 +174,6 @@ module pcie_link_layer #(
     end
 endmodule
 
-
-//##############################################################################
-// transaction_builder : one register stage, builds {header, data} records
-//##############################################################################
 module transaction_builder (
     input  wire          aclk,
     input  wire          aresetn,
@@ -242,13 +213,6 @@ module transaction_builder (
     end
 endmodule
 
-
-//##############################################################################
-// flit_packer : packs variable-size records (88 B write / 24 B read) into the
-// 236 B payload. Records never straddle FLITs. A FLIT is emitted when the next
-// record does not fit, when nothing more can fit, or after FLUSH_TMO idle clocks.
-// Assigns the flit sequence number; stalls when the replay window is full.
-//##############################################################################
 module flit_packer #(
     parameter integer WIN       = 8,
     parameter integer FLUSH_TMO = 16
@@ -278,7 +242,7 @@ module flit_packer #(
     wire [9:0]  outst  = seq - ack_next;
     wire        win_ok = (outst < WIN);
     wire        has    = (nrec != 4'd0);
-    wire        full   = has & (fill > 8'd212);            // not even a read record fits
+    wire        full   = has & (fill > 8'd212);            
     wire        tmo    = has & (idle >= FLUSH_TMO);
     wire        want_emit = has & ((s_valid & ~fits) | full | tmo);
     wire        emit   = want_emit & can_emit & win_ok;
@@ -314,12 +278,6 @@ module flit_packer #(
 endmodule
 
 
-//##############################################################################
-// replay_tx : go-back-N replay buffer between flit_protect and the transmitter.
-//   - stores every first-time data flit, forwards control flits untouched
-//   - cumulative ACK frees slots; NAK(n) acks everything < n and replays from n
-//   - replay timeout when the oldest flit is not acknowledged
-//##############################################################################
 module replay_tx #(
     parameter integer DEPTH_LOG2  = 3,
     parameter integer REPLAY_TMO  = 2048
