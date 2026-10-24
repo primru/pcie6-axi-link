@@ -1,0 +1,8 @@
+    Hinst Name                Module Name                                Inst Count           Total Area
+-----------------------------------------------------------------------------------------------------
+pcie6_top                                                                    197185          6497255.744
+ u_link_layer_u_check_u_crc   pcie6_crc_pipeline_FCR0_CHUNK_BYTES32_6290       5921           153488.384
+ u_link_layer_u_packer        flit_packer_WIN8_FLUSH_TMO16                    13549           469358.848
+ u_link_layer_u_protect_u_crc pcie6_crc_pipeline_FCR0_CHUNK_BYTES32            6119           155965.824
+ u_phy_to_proto               pcie6_phy_to_proto_PRECODE1_SCRAMBLE1            2927            81269.440
+ u_proto_to_phy               pcie6_proto_to_phy_PRECODE1_SCRAMBLE1            5022           127842.176

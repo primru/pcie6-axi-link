@@ -1,0 +1,6 @@
+[hotspot] +------------+---------------+---------------+
+[hotspot] |            |   max hotspot | total hotspot |
+[hotspot] +------------+---------------+---------------+
+[hotspot] | normalized |          0.00 |          0.00 |
+[hotspot] +------------+---------------+---------------+
+Local HotSpot Analysis: normalized max congestion hotspot area = 0.00, normalized total congestion hotspot area = 0.00 (area is in unit of 4 std-cell row bins)
